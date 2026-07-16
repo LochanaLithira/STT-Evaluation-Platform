@@ -22,10 +22,12 @@
   --red: #e05252;
   --amber: #f0a030;
   --purple: #9b7ff4;
-  --oai: #f59e0b;
-  --oai-dim: #2a1e06;
   --vx: #06b6d4;
   --vx-dim: #062030;
+  --sox: #f97316;
+  --sox-dim: #2a1a06;
+  --gla: #10b981;
+  --gla-dim: #062a1a;
 }
 
 body {
@@ -186,7 +188,6 @@ body {
   font-size: .8rem;
   padding: 10px 14px;
   margin-bottom: 14px;
-  display: flex;
   align-items: center;
   gap: 8px
 }
@@ -284,7 +285,7 @@ body {
 /* ── Panels ── */
 .cols {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 14px
 }
 
@@ -309,24 +310,20 @@ body {
   margin-bottom: 6px
 }
 
-.ph.old h3 {
-  color: var(--red)
-}
-
-.ph.nw h3 {
-  color: var(--green)
-}
-
 .ph.aai h3 {
   color: var(--purple)
 }
 
-.ph.oai h3 {
-  color: var(--oai)
-}
-
 .ph.vx h3 {
   color: var(--vx)
+}
+
+.ph.sox h3 {
+  color: var(--sox)
+}
+
+.ph.gla h3 {
+  color: var(--gla)
 }
 
 .tags {
@@ -439,68 +436,6 @@ body {
 
   50% {
     opacity: 0
-  }
-}
-
-/* Flux listening indicator */
-.listening {
-  font-size: .82rem;
-  color: #3ecf8e;
-  padding: 9px 12px;
-  border-left: 3px solid #1a6644;
-  border-radius: 0 7px 7px 0;
-  background: #0a1a12;
-  display: flex;
-  align-items: center;
-  gap: 10px
-}
-
-.ldot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--green);
-  flex-shrink: 0;
-  animation: ldot-pulse 1.4s ease-in-out infinite
-}
-
-@keyframes ldot-pulse {
-
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1)
-  }
-
-  50% {
-    opacity: .2;
-    transform: scale(.65)
-  }
-}
-
-/* Nova-3 speech-started flash */
-.speech-ping {
-  font-size: .75rem;
-  color: var(--blue);
-  padding: 5px 10px;
-  border-left: 3px solid var(--blue);
-  border-radius: 0 5px 5px 0;
-  background: var(--blue-dim);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  animation: fade-in .15s ease
-}
-
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(3px)
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0)
   }
 }
 
@@ -619,17 +554,11 @@ body {
 
 @media(max-width:1400px) {
   .cols {
-    grid-template-columns: repeat(3, 1fr)
+    grid-template-columns: repeat(2, 1fr)
   }
 }
 
-@media(max-width:900px) {
-  .cols {
-    grid-template-columns: 1fr 1fr
-  }
-}
-
-@media(max-width:600px) {
+@media(max-width:700px) {
   .cols {
     grid-template-columns: 1fr
   }

@@ -9,15 +9,6 @@ except ImportError:
     pass
 
 
-def get_api_key():
-    key = os.environ.get("DEEPGRAM_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError(
-            "DEEPGRAM_API_KEY not set. Add it to the .env file next to app.py"
-        )
-    return key
-
-
 def get_assemblyai_key():
     key = os.environ.get("ASSEMBLYAI_API_KEY", "").strip()
     if not key:
@@ -27,19 +18,28 @@ def get_assemblyai_key():
     return key
 
 
-def get_openai_key():
-    key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not key:
-        raise RuntimeError(
-            "OPENAI_API_KEY not set. Add it to the .env file next to app.py"
-        )
-    return key
-
-
 def get_mistral_key():
     key = os.environ.get("MISTRAL_API_KEY", "").strip()
     if not key:
         raise RuntimeError(
             "MISTRAL_API_KEY not set. Add it to the .env file next to app.py"
+        )
+    return key
+
+
+def get_soniox_key():
+    key = os.environ.get("SONIOX_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError(
+            "SONIOX_API_KEY not set. Add it to the .env file next to app.py"
+        )
+    return key
+
+
+def get_gladia_key():
+    key = os.environ.get("GLADIA_API_KEY", "").strip()
+    if not key:
+        raise RuntimeError(
+            "GLADIA_API_KEY not set. Add it to the .env file next to app.py"
         )
     return key
