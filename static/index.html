@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>STT Test: Nova-3 vs Flux vs AssemblyAI U3 Pro | 3-Way Comparison</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+
+  <div class="header">
+    <h1>🎙 Live STT Comparison <span class="badge">5-Way</span></h1>
+    <p>Speak into your mic — Nova-3, Flux, AssemblyAI U3 Pro, OpenAI gpt-realtime-whisper, and Voxtral transcribe
+      simultaneously.</p>
+  </div>
+
+  <div class="cfg">
+    <span class="cfg-label">Language:</span>
+    <div class="ltog">
+      <button id="btnEn" class="on" onclick="setLang('en')">EN English</button>
+      <button id="btnFr" onclick="setLang('fr')">FR Monolingual</button>
+      <button id="btnFrBi" onclick="setLang('fr-bilingual')">FR + EN Bilingual</button>
+    </div>
+    <button id="startBtn" onclick="toggle()">
+      <span class="pulse-dot"></span>
+      <span id="startBtnTxt">▶ Start</span>
+    </button>
+  </div>
+
+  <div class="err" id="errEl">
+    <span>⚠</span><span id="errTxt"></span>
+  </div>
+
+  <!-- VAD meter -->
+  <div class="vad-card">
+    <h2>Audio Level — VAD Threshold Visualization</h2>
+    <div class="meter-wrap" id="mw">
+      <div class="meter-fill" id="mf"></div>
+    </div>
+    <div class="legend">
+      <div class="leg-item"><span class="leg-dot" style="background:var(--red)"></span>Old barge-in:
+        <strong>1000</strong> — audio dropped below this
+      </div>
+      <div class="leg-item"><span class="leg-dot" style="background:var(--amber)"></span>New barge-in:
+        <strong>650</strong> — proposed fix
+      </div>
+    </div>
+    <div class="vad-status" id="vs">⏸ Not recording</div>
+  </div>
+
+  <!-- Side-by-side panels -->
+  <div class="cols">
+    <!-- Nova-3 -->
+    <div class="panel">
+      <div class="ph old">
+        <h3 id="t1">❌ Nova-3 — Streaming STT (English)</h3>
+        <div class="tags">
+          <span class="tag">model=nova-3</span>
+          <span class="tag" id="l1tag">language=en</span>
+          <span class="tag fixed">endpointing=300ms ✓</span>
+          <span class="tag fixed">utterance_end=1000ms ✓</span>
+          <span class="tag fixed">vad_events=true ✓</span>
+          <span class="tag fixed">punctuate=true ✓</span>
+          <span class="tag fixed">16kHz resample ✓</span>
+        </div>
+        <div class="model-note">Continuous interim results · VAD barge-in: <strong>1000</strong> → <strong>650</strong>
+          under test</div>
+        <div class="lat-stats" id="lsNova">
+          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="n3-last">—</span></div>
+          <div class="ls-item"><span class="ls-label">Avg</span><span class="ls-val na" id="n3-avg">—</span></div>
+          <div class="ls-item"><span class="ls-label">Min</span><span class="ls-val na" id="n3-min">—</span></div>
+          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="n3-max">—</span></div>
+        </div>
+      </div>
+      <div class="ta" id="a1"><span class="ph2">Transcription appears here live…</span></div>
+    </div>
+
+    <!-- Flux -->
+    <div class="panel">
+      <div class="ph nw">
+        <h3 id="t2">✅ Flux Multilingual — Conversational STT (English)</h3>
+        <div class="tags">
+          <span class="tag" id="fluxModelTag">model=flux-general-en</span>
+          <span class="tag" id="l2tag">(no language_hint)</span>
+          <span class="tag fixed">eot_threshold=0.7 ✓</span>
+          <span class="tag fixed">eager_eot=0.4 ✓</span>
+          <span class="tag fixed">eot_timeout=3000ms ✓</span>
+          <span class="tag fixed">80ms chunks ✓</span>
+          <span class="tag fixed">16kHz resample ✓</span>
+        </div>
+        <div class="model-note">Turn-based · EagerEndOfTurn speculative · <span id="detectedLang"
+            style="color:var(--green)"></span></div>
+        <div class="lat-stats" id="lsFlux">
+          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="fl-last">—</span></div>
+          <div class="ls-item"><span class="ls-label">Avg</span><span class="ls-val na" id="fl-avg">—</span></div>
+          <div class="ls-item"><span class="ls-label">Min</span><span class="ls-val na" id="fl-min">—</span></div>
+          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="fl-max">—</span></div>
+        </div>
+      </div>
+      <div class="ta" id="a2"><span class="ph2">Transcription appears here live…</span></div>
+    </div>
+
+    <!-- AssemblyAI U3 Pro -->
+    <div class="panel">
+      <div class="ph aai">
+        <h3 id="t3">🟣 AssemblyAI U3 Pro — Streaming STT (English)</h3>
+        <div class="tags">
+          <span class="tag" style="border-color:#3a2060;color:var(--purple);background:#120820">model=u3-rt-pro</span>
+          <span class="tag" id="l3tag">(default prompt)</span>
+          <span class="tag fixed">min_turn_silence=100ms ✓</span>
+          <span class="tag fixed">max_turn_silence=1000ms ✓</span>
+          <span class="tag fixed">punctuation-based EOT ✓</span>
+          <span class="tag fixed">16kHz resample ✓</span>
+        </div>
+        <div class="model-note">Early partial ~800ms · Final on terminal punctuation · <span id="aaiNote"
+            style="color:var(--purple)"></span></div>
+        <div class="lat-stats" id="lsAAI">
+          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="aa-last">—</span></div>
+          <div class="ls-item"><span class="ls-label">Avg</span><span class="ls-val na" id="aa-avg">—</span></div>
+          <div class="ls-item"><span class="ls-label">Min</span><span class="ls-val na" id="aa-min">—</span></div>
+          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="aa-max">—</span></div>
+        </div>
+      </div>
+      <div class="ta" id="a3"><span class="ph2">Transcription appears here live…</span></div>
+    </div>
+
+    <!-- OpenAI gpt-4o-transcribe -->
+    <div class="panel">
+      <div class="ph oai">
+        <h3 id="t4">⚡ gpt-realtime-whisper — Realtime STT (English)</h3>
+        <div class="tags">
+          <span class="tag"
+            style="border-color:#4a3010;color:var(--oai);background:#1a1006">model=gpt-realtime-whisper</span>
+          <span class="tag" id="l4tag">language=en</span>
+          <span class="tag fixed">intent=transcription ✓</span>
+          <span class="tag fixed">server_vad=true ✓</span>
+          <span class="tag warn">16→24kHz upsampled ⚡</span>
+          <span class="tag fixed">Base64 JSON audio ✓</span>
+        </div>
+        <div class="model-note">Server VAD · Interim deltas · Final on completed event · <span id="oaiNote"
+            style="color:var(--oai)"></span></div>
+        <div class="lat-stats" id="lsOAI">
+          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="oa-last">—</span></div>
+          <div class="ls-item"><span class="ls-label">Avg</span><span class="ls-val na" id="oa-avg">—</span></div>
+          <div class="ls-item"><span class="ls-label">Min</span><span class="ls-val na" id="oa-min">—</span></div>
+          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="oa-max">—</span></div>
+        </div>
+      </div>
+      <div class="ta" id="a4"><span class="ph2">Transcription appears here live…</span></div>
+    </div>
+
+    <!-- Mistral Voxtral Realtime -->
+    <div class="panel">
+      <div class="ph vx">
+        <h3 id="t5">🌊 Voxtral — Realtime STT (Auto-detect)</h3>
+        <div class="tags">
+          <span class="tag"
+            style="border-color:#0a3a45;color:var(--vx);background:#031520">model=voxtral-mini-transcribe-realtime-2602</span>
+          <span class="tag fixed">pcm_s16le@16kHz ✓</span>
+          <span class="tag fixed">delay=480ms balanced ✓</span>
+          <span class="tag fixed">Base64 JSON audio ✓</span>
+          <span class="tag">auto-detect language</span>
+        </div>
+        <div class="model-note">Streaming deltas · 1.5s silence-flush · <span id="vxNote"
+            style="color:var(--vx)"></span></div>
+        <div class="lat-stats" id="lsVX">
+          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="vx-last">—</span></div>
+          <div class="ls-item"><span class="ls-label">Avg</span><span class="ls-val na" id="vx-avg">—</span></div>
+          <div class="ls-item"><span class="ls-label">Min</span><span class="ls-val na" id="vx-min">—</span></div>
+          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="vx-max">—</span></div>
+        </div>
+      </div>
+      <div class="ta" id="a5"><span class="ph2">Transcription appears here live…</span></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
