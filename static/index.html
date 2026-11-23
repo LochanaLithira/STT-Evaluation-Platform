@@ -12,15 +12,30 @@
 
   <div class="header">
     <h1>AssemblyAI Realtime Comparison <span class="badge">A/B</span></h1>
-    <p>Speak into your mic. Universal-3.5 Pro Realtime and STT-3.7 Realtime Agent transcribe the same audio at the same time, with the same settings. Paste a reference transcript to score accuracy.</p>
+    <p>Speak into your mic. Universal-3.5 Pro Realtime and STT-3.7 Realtime Agent transcribe the same audio at the same time, with the same settings. <strong>Live call</strong> runs both exactly as our calls do: the call's settings, your voice through a phone line, and the agent's question as context. Paste a reference transcript to score accuracy.</p>
   </div>
 
   <div class="cfg">
     <div class="cfg-group">
+      <span class="cfg-label">Settings</span>
+      <div class="ltog">
+        <button data-g="profile" data-v="live" class="on" title="Exactly what a live call sends: end-of-turn silences, language prompt and code, partial turns, phone-line audio, agent context">Live call (as on calls)</button>
+        <button data-g="profile" data-v="lab" title="AssemblyAI's own defaults: balanced mode, no end-of-turn settings, clean 16 kHz mic audio">AssemblyAI defaults</button>
+      </div>
+    </div>
+
+    <div class="cfg-group" id="eotGroup">
+      <span class="cfg-label">End of turn</span>
+      <label class="eot" title="max_turn_silence, as the agent's end-of-turn setting on calls (1400 ms unless the agent sets its own); min_turn_silence follows it as on calls">
+        <input id="eotMs" type="number" min="300" max="5000" step="50" value="1400" /> ms
+      </label>
+    </div>
+
+    <div class="cfg-group">
       <span class="cfg-label">Language</span>
       <div class="ltog">
-        <button data-g="lang" data-v="en" class="on">EN English</button>
-        <button data-g="lang" data-v="fr">FR Monolingual</button>
+        <button data-g="lang" data-v="en">EN English</button>
+        <button data-g="lang" data-v="fr" class="on">FR Monolingual</button>
         <button data-g="lang" data-v="fr-bilingual">FR + EN Bilingual</button>
         <button data-g="lang" data-v="auto">Auto</button>
       </div>
@@ -38,6 +53,18 @@
       <span class="ref-hint">Paste exactly what will be said. Each model gets a word error rate (WER) when the run ends. Case and punctuation are ignored; numbers written as digits vs words count as errors.</span>
     </div>
     <textarea id="refText" rows="3" placeholder="e.g. The quick brown fox jumps over the lazy dog."></textarea>
+  </div>
+
+  <div class="ref-card" id="ctxCard">
+    <div class="ref-head">
+      <h2>What the agent just asked <span class="opt">agent context</span></h2>
+      <span class="ref-hint">On a call, each time a question finishes playing, its words are sent to the model as agent_context, so the caller's short answer is read against the question. Type the question, then press Send (or Enter) before you answer it. Sent to both models.</span>
+    </div>
+    <div class="ctx-row">
+      <input id="ctxText" type="text" maxlength="300" placeholder="e.g. Est-ce que vous êtes propriétaire de votre logement ?" />
+      <button id="ctxBtn" type="button">Send</button>
+      <span id="ctxStatus" class="ctx-status"></span>
+    </div>
   </div>
 
   <div class="err" id="errEl">
@@ -61,8 +88,8 @@
         <h3>Universal-3.5 Pro Realtime</h3>
         <div class="tags">
           <span class="tag" style="border-color:#3a2060;color:var(--purple);background:#120820">speech_model=universal-3-5-pro</span>
-          <span class="tag fixed">16kHz PCM16</span>
-          <span class="tag" data-lang-tag>language_codes=["en"]</span>
+          <span class="tag fixed" data-audio-tag>phone line: 8 kHz µ-law → 16 kHz</span>
+          <span class="tag" data-lang-tag>language_codes=fr · prompt "Transcribe French."</span>
         </div>
         <div class="model-note">Previous-gen flagship · <span id="u35-note" style="color:var(--purple)"></span></div>
         <div class="session-info" id="u35-session">Not connected</div>
@@ -83,8 +110,8 @@
         <h3>STT-3.7 Realtime Agent</h3>
         <div class="tags">
           <span class="tag" style="border-color:#0a3a45;color:var(--s37);background:#031520">speech_model=assemblyai-stt-3-7-realtime-agent</span>
-          <span class="tag fixed">16kHz PCM16</span>
-          <span class="tag" data-lang-tag>language_codes=["en"]</span>
+          <span class="tag fixed" data-audio-tag>phone line: 8 kHz µ-law → 16 kHz</span>
+          <span class="tag" data-lang-tag>language_codes=fr · prompt "Transcribe French."</span>
         </div>
         <div class="model-note">Voice-agent model · <span id="s37-note" style="color:var(--s37)"></span></div>
         <div class="session-info" id="s37-session">Not connected</div>

@@ -38,6 +38,39 @@ MODES = ("balanced", "min_latency", "max_accuracy")
 # (verified); an unknown value is rejected at connect with close 3006.
 VOICE_FOCUS = ("near-field", "far-field")
 
+# ── Live call profile ────────────────────────────────────────────────────────
+# Exactly what ai-voice-agent-api sends on a live call (call_handler._start_stt,
+# 23 Nov 2026): the same query string, built the same way.
+PROFILES = ("live", "lab")
+EOT_DEFAULT_MS = 1400        # EOT_SILENCE_MS: an agent's eot_silence_ms overrides it
+EOT_MIN_SILENCE_MS = 650     # EOT_MIN_SILENCE_MS
+LIVE_PROMPTS = {             # call_handler._LANG_PROMPTS
+    "fr": "Transcribe%20French.",
+    "es": "Transcribe%20Spanish.",
+    "de": "Transcribe%20German.",
+    "it": "Transcribe%20Italian.",
+    "pt": "Transcribe%20Portuguese.",
+}
+AGENT_CONTEXT_MAX = 300      # call_handler._agent_context_text cuts at 300
+
+
+def live_call_query(speech_model: str, lang: str, eot_ms: int) -> str:
+    """The query string of a live call's AssemblyAI socket."""
+    aai_lang = (lang or "").strip().lower().split("-")[0]
+    prompt = LIVE_PROMPTS.get(aai_lang, "")
+    return (
+        f"sample_rate=16000"
+        f"&encoding=pcm_s16le"
+        f"&speech_model={speech_model}"
+        f"&format_turns=true"
+        f"&min_turn_silence={min(EOT_MIN_SILENCE_MS, max(100, eot_ms - 100))}"
+        f"&max_turn_silence={eot_ms}"
+        f"&include_partial_turns=true"
+        + (f"&prompt={prompt}" if prompt else "")
+        + (f"&language_codes={aai_lang}" if aai_lang else "")
+    )
+
+
 # UI language option → language_codes sent to AssemblyAI (None = no steering)
 LANGUAGES = {
     "en":           ["en"],
@@ -49,10 +82,19 @@ LANGUAGES = {
 
 class AssemblyAIPipeline(Pipeline):
     def __init__(self, source: str, label: str, speech_model: str, api_key: str,
-                 mode: str = "", lang: str = "en", voice_focus: str = ""):
+                 mode: str = "", lang: str = "en", voice_focus: str = "",
+                 profile: str = "lab", eot_ms: int = EOT_DEFAULT_MS):
         self.source       = source
         self.label        = label
         self.speech_model = speech_model
+        self.profile      = profile if profile in PROFILES else "lab"
+        self._agent_context = ""
+        self.auth = {"Authorization": api_key}
+        self.ws   = None
+        if self.profile == "live":
+            # As on a live call: no mode, no voice focus, no language detection.
+            self.url = STREAMING_URL + "?" + live_call_query(speech_model, lang, eot_ms)
+            return
         params = {
             "speech_model": speech_model,
             "sample_rate": 16000,
@@ -140,6 +182,22 @@ class AssemblyAIPipeline(Pipeline):
                 await send_fn({"source": self.source, "error": reason})
         except Exception as e:
             print(f"[{self.label}] receive_loop error:", e)
+
+    async def set_agent_context(self, text: str) -> bool:
+        """What the agent just said, as a live call sends it after each
+        question finishes playing (call_handler._send_agent_context): one
+        UpdateConfiguration with agent_context, cut at 300 characters, not
+        resent when unchanged. True when sent."""
+        text = (text or "").strip()[:AGENT_CONTEXT_MAX]
+        if not self.ws or not text or text == self._agent_context:
+            return False
+        try:
+            await self.ws.send(json.dumps({"type": "UpdateConfiguration", "agent_context": text}))
+            self._agent_context = text
+            return True
+        except Exception as e:
+            print(f"[{self.label}] agent_context not sent:", e)
+            return False
 
     async def finish(self):
         """Ask the server to finalize the current turn and end the session."""

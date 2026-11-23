@@ -16,11 +16,18 @@ const LANG_TAG = {
   'fr-bilingual': 'language_codes=["fr","en"]',
   'auto': 'no language steering'
 };
+// What a live call sends for each language (call_handler._start_stt).
+const LIVE_LANG_TAG = {
+  'en': 'language_codes=en',
+  'fr': 'language_codes=fr · prompt "Transcribe French."'
+};
+const LIVE_LANGS = ['en', 'fr'];       // calls use the agent's one language
 
 // ─── State ───────────────────────────────────────────────────────────────────
-// Only the language is user-selectable. Mode and voice focus use the server
-// defaults (balanced, off) — see routes/compare.py.
-const cfg = { lang: 'en' };
+// Live call (default): the call's own settings, phone-line audio and agent
+// context. AssemblyAI defaults: mode and voice focus at the server defaults
+// (balanced, off) — see routes/compare.py.
+const cfg = { lang: 'fr', profile: 'live' };
 const APPLIED_DEFAULTS = { mode: 'balanced', voice_focus: '' };
 let state = 'idle';                    // idle | running | finalizing
 let ws = null, runId = 0, finalizeTimer = null;
@@ -44,21 +51,65 @@ document.querySelectorAll('.ltog button[data-g]').forEach(function (b) {
 document.getElementById('startBtn').addEventListener('click', function () {
   if (state === 'idle') start(); else if (state === 'running') stop();
 });
+document.getElementById('ctxBtn').addEventListener('click', sendContext);
+document.getElementById('ctxText').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); sendContext(); }
+});
+document.getElementById('eotMs').addEventListener('input', updateTags);
 document.getElementById('refText').addEventListener('input', function () {
   // Re-score the last run if the reference is edited afterwards.
   if (state === 'idle' && run.u35) scoreRun();
 });
 SOURCES.forEach(function (s) { run[s] = newRunData(); });
+updateTags();
 
 function setOpt(group, value) {
   if (state !== 'idle') return;
+  // Calls run one language: bilingual and auto do not exist on a call.
+  if (group === 'lang' && cfg.profile === 'live' && LIVE_LANGS.indexOf(value) < 0) return;
   cfg[group] = value;
-  document.querySelectorAll('.ltog button[data-g="' + group + '"]').forEach(function (b) {
-    b.className = b.dataset.v === value ? 'on' : '';
+  if (group === 'profile' && value === 'live' && LIVE_LANGS.indexOf(cfg.lang) < 0) cfg.lang = 'fr';
+  ['profile', 'lang'].forEach(function (g) {
+    document.querySelectorAll('.ltog button[data-g="' + g + '"]').forEach(function (b) {
+      b.className = b.dataset.v === cfg[g] ? 'on' : '';
+    });
   });
-  if (group === 'lang') {
-    document.querySelectorAll('[data-lang-tag]').forEach(function (t) { t.textContent = LANG_TAG[value]; });
+  updateTags();
+  setState(state);
+}
+
+function eotMs() {
+  const v = parseInt(document.getElementById('eotMs').value, 10);
+  return Math.max(300, Math.min(5000, isNaN(v) ? 1400 : v));
+}
+
+// The tags under each model say what it is actually sent.
+function updateTags() {
+  const live = cfg.profile === 'live';
+  const eot = eotMs();
+  document.getElementById('eotGroup').style.display = live ? '' : 'none';
+  document.getElementById('ctxCard').style.display = live ? '' : 'none';
+  document.querySelectorAll('[data-lang-tag]').forEach(function (t) {
+    t.textContent = live
+      ? LIVE_LANG_TAG[cfg.lang] + ' · min/max_turn_silence ' + Math.min(650, Math.max(100, eot - 100)) + '/' + eot + ' ms'
+      : LANG_TAG[cfg.lang];
+  });
+  document.querySelectorAll('[data-audio-tag]').forEach(function (t) {
+    t.textContent = live ? 'phone line: 8 kHz µ-law → 16 kHz, 60 ms sends' : '16kHz PCM16 mic';
+  });
+}
+
+// Agent context: what the agent just asked, sent to both models.
+function sendContext() {
+  const text = document.getElementById('ctxText').value.trim();
+  const st = document.getElementById('ctxStatus');
+  if (!text) { st.textContent = 'Type the question first'; return; }
+  if (state !== 'running' || !ws || ws.readyState !== WebSocket.OPEN) {
+    st.textContent = 'Sent when you press Start';
+    return;
   }
+  ws.send(JSON.stringify({ type: 'agent_context', text: text }));
+  st.textContent = 'Sending…';
 }
 
 // ─── Start / Stop ────────────────────────────────────────────────────────────
@@ -79,7 +130,7 @@ async function start() {
 
   const id = ++runId;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const qs = new URLSearchParams({ lang: cfg.lang });
+  const qs = new URLSearchParams({ lang: cfg.lang, profile: cfg.profile, eot_ms: String(eotMs()) });
   const sock = new WebSocket(proto + '://' + location.host + '/ws/compare?' + qs);
   sock.binaryType = 'arraybuffer';
   ws = sock;
@@ -88,6 +139,9 @@ async function start() {
 
   sock.onopen = function () {
     if (id !== runId) return;
+    // A question typed before Start is the context of the first answer.
+    const ctx = document.getElementById('ctxText').value.trim();
+    if (cfg.profile === 'live' && ctx) sock.send(JSON.stringify({ type: 'agent_context', text: ctx }));
     startMic();
   };
   sock.onmessage = function (e) { if (id === runId) handleMessage(JSON.parse(e.data)); };
@@ -184,6 +238,10 @@ function sendChunk(i16) {
 // ─── Messages from the server ────────────────────────────────────────────────
 function handleMessage(m) {
   if (m.type === 'done') { finish(); return; }
+  if (m.type === 'agent_context_sent') {
+    document.getElementById('ctxStatus').textContent = m.sent ? '✓ Sent to both' : 'Unchanged, not resent';
+    return;
+  }
   if (m.error && !m.source) { showErr('Server error: ' + m.error); finish(); return; }
   if (!run[m.source]) return;
   if (m.error) { showPanelErr(m.source, m.error); return; }
@@ -365,8 +423,9 @@ function renderAlign(src, ops, s) {
 function showSession(src, s) {
   const vf = s.voice_focus || '';
   const txt = 'model=' + (s.model || '?') + ' · mode=' + (s.mode || '?') + ' · voice_focus=' + (vf || 'off');
-  const mismatch = (s.model && s.model !== EXPECTED_MODEL[src]) ||
-    (s.mode && s.mode !== APPLIED_DEFAULTS.mode) || vf !== APPLIED_DEFAULTS.voice_focus;
+  // Live call sends no mode or voice focus (as on calls): only the model is checked.
+  const mismatch = (s.model && s.model !== EXPECTED_MODEL[src]) || (cfg.profile !== 'live' &&
+    ((s.mode && s.mode !== APPLIED_DEFAULTS.mode) || vf !== APPLIED_DEFAULTS.voice_focus));
   setSession(src, (mismatch ? '⚠ server applied ' : '✓ ') + txt, mismatch);
 }
 
@@ -419,7 +478,15 @@ function setState(v) {
   document.getElementById('startBtnTxt').textContent = { idle: 'Start', running: 'Stop', finalizing: 'Finalizing…' }[v];
   btn.className = v === 'running' ? 'stop' : '';
   btn.disabled = v === 'finalizing';
-  document.querySelectorAll('.ltog button[data-g]').forEach(function (b) { b.disabled = v !== 'idle'; });
+  document.querySelectorAll('.ltog button[data-g]').forEach(function (b) {
+    const unavailable = b.dataset.g === 'lang' && cfg.profile === 'live' && LIVE_LANGS.indexOf(b.dataset.v) < 0;
+    b.disabled = v !== 'idle' || unavailable;
+    b.classList.toggle('unavail', unavailable);
+    b.title = unavailable ? 'Calls run in the agent\'s one language' : (b.title || '');
+  });
+  document.getElementById('eotMs').disabled = v !== 'idle';
+  document.getElementById('ctxBtn').disabled = v === 'finalizing';
+  if (v === 'idle') document.getElementById('ctxStatus').textContent = '';
   if (v === 'finalizing') document.getElementById('vs').textContent = 'Waiting for final transcripts…';
   if (v === 'idle') { document.getElementById('vs').textContent = 'Not recording'; document.getElementById('vs').style.color = ''; }
 }

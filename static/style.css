@@ -679,3 +679,13 @@ body {
   opacity: .6;
   font-family: 'Fira Code', monospace
 }
+
+/* Live call settings: end of turn and agent context */
+.eot { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: .8rem; }
+.eot input { width: 76px; padding: 5px 8px; border-radius: 6px; border: 1px solid #333; background: #111; color: inherit; font: inherit; }
+.ctx-row { display: flex; gap: 8px; align-items: center; }
+.ctx-row input { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid #333; background: #111; color: inherit; font: inherit; }
+.ctx-row button { padding: 8px 14px; border-radius: 6px; border: 1px solid #333; background: #1b1b1b; color: inherit; cursor: pointer; }
+.ctx-row button:disabled { opacity: .5; cursor: default; }
+.ctx-status { font-size: .75rem; color: var(--text-muted); min-width: 90px; }
+.ltog button:disabled.unavail { text-decoration: line-through; }
