@@ -1,68 +1,69 @@
 """
-/ws/compare4 — 4-way STT comparison endpoint.
+/ws/compare — AssemblyAI model A/B endpoint.
 
-AssemblyAI U3 Pro + Voxtral + Soniox + Gladia Solaria.
+Streams the same browser audio to two AssemblyAI realtime models side by side:
+  - Universal-3.5 Pro Realtime          (source "u35")
+  - AssemblyAI-STT-3.7-Realtime-Agent   (source "s37")
 """
 import asyncio
+import json
 
 from fastapi import APIRouter, WebSocket
 
-from config import get_assemblyai_key, get_mistral_key, get_soniox_key, get_gladia_key
-from pipelines import (
-    AssemblyAIPipeline, VoxtralPipeline, SonioxPipeline, GladiaPipeline,
-)
+from config import get_assemblyai_key
+from pipelines import AssemblyAIPipeline, MODES
 
 router = APIRouter()
 
-
-async def _optional_key(browser: WebSocket, getter, src: str):
-    """Fetch an optional key; on failure, warn but let the comparison continue."""
-    try:
-        return getter()
-    except RuntimeError as e:
-        try:
-            await browser.send_json({"source": src, "error": str(e)})
-        except Exception:
-            pass
-        return None
+# (source id, console label, speech_model)
+MODELS = [
+    ("u35", "U3.5 Pro", "universal-3-5-pro"),
+    ("s37", "STT-3.7 Agent", "assemblyai-stt-3-7-realtime-agent"),
+]
 
 
-@router.websocket("/ws/compare4")
-async def compare4_ws(browser: WebSocket, lang: str = "en"):
+@router.websocket("/ws/compare")
+async def compare_ws(browser: WebSocket, lang: str = "en", mode: str = "balanced",
+                     voice_focus: str = ""):
     """
-    4-way comparison: AssemblyAI U3 Pro + Voxtral + Soniox + Gladia Solaria.
-    Audio arrives from the browser resampled to 16 kHz Int16 PCM.
-    All pipelines accept 16kHz PCM16 natively.
+    Audio arrives from the browser as 16 kHz Int16 PCM, 80 ms chunks.
+    Every setting is applied to both models so the comparison is like-for-like:
+      lang         en | fr | fr-bilingual | auto   (the only toggle in the UI)
+      mode         balanced (default) | min_latency | max_accuracy
+      voice_focus  "" = off (default) | near-field | far-field
+    Defaults: balanced is AssemblyAI's recommended turn detection; voice
+    focus off avoids suppressing quiet or distant speech. mode/voice_focus
+    stay accepted here for scripted tests. Unknown values fall back to defaults.
+    Browser sends binary audio, then {"type":"stop"}; the server answers
+    {"type":"done"} once both models have sent their last final.
     """
     await browser.accept()
 
-    aai_key     = await _optional_key(browser, get_assemblyai_key, "aai")
-    mistral_key = await _optional_key(browser, get_mistral_key, "voxtral")
-    soniox_key  = await _optional_key(browser, get_soniox_key, "soniox")
-    gladia_key  = await _optional_key(browser, get_gladia_key, "gladia")
+    try:
+        api_key = get_assemblyai_key()
+    except RuntimeError as e:
+        await browser.send_json({"error": str(e)})
+        await browser.close()
+        return
 
-    aai     = AssemblyAIPipeline(lang, aai_key)     if aai_key     else None
-    voxtral = VoxtralPipeline(lang, mistral_key)    if mistral_key else None
-    soniox  = SonioxPipeline(lang, soniox_key)      if soniox_key  else None
-    gladia  = GladiaPipeline(lang, gladia_key)      if gladia_key  else None
+    pipelines = [AssemblyAIPipeline(src, label, model, api_key,
+                                    mode if mode in MODES else "balanced",
+                                    lang, voice_focus)
+                 for src, label, model in MODELS]
 
-    connect_targets = []
-    if aai:     connect_targets.append((aai,     "AAI U3",  "aai"))
-    if voxtral: connect_targets.append((voxtral, "Voxtral", "voxtral"))
-    if soniox:  connect_targets.append((soniox,  "Soniox",  "soniox"))
-    if gladia:  connect_targets.append((gladia,  "Gladia",  "gladia"))
-
-    for pipeline, label, src in connect_targets:
-        try:
-            await pipeline.connect()
-        except Exception as e:
-            print("[" + label + "] FAILED: " + str(e))
+    # Connect both at once so neither gets a head start.
+    results = await asyncio.gather(*(p.connect() for p in pipelines), return_exceptions=True)
+    for p, res in zip(pipelines, results):
+        if isinstance(res, Exception):
+            print(f"[{p.label}] FAILED: {res}")
+            p.ws = None
             try:
-                await browser.send_json({"source": src, "error": str(e)})
+                await browser.send_json({"source": p.source, "error": str(res)})
             except Exception:
                 pass
 
-    if not any(p.ws for p, _, _ in connect_targets):
+    live = [p for p in pipelines if p.ws]
+    if not live:
         try:
             await browser.send_json({"error": "All connections failed. Check server console."})
         except Exception:
@@ -77,28 +78,43 @@ async def compare4_ws(browser: WebSocket, lang: str = "en"):
             pass
 
     async def audio_relay():
+        """Forward audio until the browser sends {"type":"stop"} (→ True)
+        or disconnects (→ False)."""
         try:
             while True:
-                data = await browser.receive_bytes()
-                relay_tasks = [p.send_audio(data) for p, _, _ in connect_targets if p.ws]
-                if relay_tasks:
-                    await asyncio.gather(*relay_tasks, return_exceptions=True)
+                msg = await browser.receive()
+                if msg["type"] == "websocket.disconnect":
+                    return False
+                if msg.get("bytes"):
+                    await asyncio.gather(*(p.send_audio(msg["bytes"]) for p in live),
+                                         return_exceptions=True)
+                elif msg.get("text"):
+                    try:
+                        if json.loads(msg["text"]).get("type") == "stop":
+                            return True
+                    except ValueError:
+                        pass
         except Exception:
-            pass
+            return False
 
-    tasks = [asyncio.create_task(audio_relay())]
-    for pipeline, _, _ in connect_targets:
-        tasks.append(asyncio.create_task(pipeline.receive_loop(send_to_browser)))
+    relay = asyncio.create_task(audio_relay())
+    receivers = [asyncio.create_task(p.receive_loop(send_to_browser)) for p in live]
 
     try:
-        await asyncio.gather(*tasks)
-    except Exception:
-        pass
+        stopped = await relay
+        if stopped:
+            # Without more audio the models never hear the silence that ends a
+            # turn, so the last sentence would stay a partial. Terminate makes
+            # each model finalize it; wait for both before telling the browser.
+            await asyncio.gather(*(p.finish() for p in live), return_exceptions=True)
+            await asyncio.wait(receivers, timeout=8)
+            await send_to_browser({"type": "done"})
     finally:
-        for t in tasks:
+        for p in live:
+            await p.close()
+        await asyncio.wait(receivers, timeout=3)
+        for t in [relay] + receivers:
             t.cancel()
-        for pipeline, _, _ in connect_targets:
-            await pipeline.close()
         try:
             await browser.close()
         except Exception:

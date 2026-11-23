@@ -1,11 +1,12 @@
 """
-STT Comparison Test App - 4-Way Realtime Streaming
-===================================================
-Set your API keys in .env:
+AssemblyAI Realtime Model Comparison
+====================================
+Streams your mic to two AssemblyAI realtime models side by side:
+    Universal-3.5 Pro Realtime   (universal-3-5-pro)
+    STT-3.7 Realtime Agent       (assemblyai-stt-3-7-realtime-agent)
+
+Set your API key in .env:
     ASSEMBLYAI_API_KEY=your_assemblyai_key
-    MISTRAL_API_KEY=your_mistral_key
-    SONIOX_API_KEY=your_soniox_key
-    GLADIA_API_KEY=your_gladia_key
 
 Run:
     pip install -r requirements.txt
@@ -20,7 +21,7 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from config import get_assemblyai_key, get_mistral_key, get_soniox_key, get_gladia_key
+from config import get_assemblyai_key
 from routes.compare import router as compare_router
 
 HERE = Path(__file__).parent
@@ -37,27 +38,12 @@ async def get():
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("  STT 4-Way Comparison")
-    print("  AssemblyAI U3 Pro | Voxtral | Soniox | Gladia Solaria")
+    print("  AssemblyAI Realtime Comparison")
+    print("  Universal-3.5 Pro | STT-3.7 Realtime Agent")
     print("-" * 60)
     try:
         k = get_assemblyai_key()
         print("  AssemblyAI key:  " + k[:8] + "*" * 12)
-    except RuntimeError as e:
-        print("  WARNING: " + str(e))
-    try:
-        k2 = get_mistral_key()
-        print("  Mistral key:     " + k2[:8] + "*" * 12)
-    except RuntimeError as e:
-        print("  WARNING: " + str(e))
-    try:
-        k3 = get_soniox_key()
-        print("  Soniox key:      " + k3[:8] + "*" * 12)
-    except RuntimeError as e:
-        print("  WARNING: " + str(e))
-    try:
-        k4 = get_gladia_key()
-        print("  Gladia key:      " + k4[:8] + "*" * 12)
     except RuntimeError as e:
         print("  WARNING: " + str(e))
     print("  Open: http://localhost:8765")

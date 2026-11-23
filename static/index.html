@@ -4,35 +4,47 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>STT 4-Way Comparison | AAI · Voxtral · Soniox · Gladia</title>
+  <title>AssemblyAI Realtime Comparison | U3.5 Pro vs STT-3.7 Agent</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 
 <body>
 
   <div class="header">
-    <h1>Live STT Comparison <span class="badge">4-Way</span></h1>
-    <p>Speak into your mic — AssemblyAI U3 Pro, Voxtral, Soniox, and Gladia Solaria transcribe simultaneously.</p>
+    <h1>AssemblyAI Realtime Comparison <span class="badge">A/B</span></h1>
+    <p>Speak into your mic. Universal-3.5 Pro Realtime and STT-3.7 Realtime Agent transcribe the same audio at the same time, with the same settings. Paste a reference transcript to score accuracy.</p>
   </div>
 
   <div class="cfg">
-    <span class="cfg-label">Language:</span>
-    <div class="ltog">
-      <button id="btnEn" class="on" onclick="setLang('en')">EN English</button>
-      <button id="btnFr" onclick="setLang('fr')">FR Monolingual</button>
-      <button id="btnFrBi" onclick="setLang('fr-bilingual')">FR + EN Bilingual</button>
+    <div class="cfg-group">
+      <span class="cfg-label">Language</span>
+      <div class="ltog">
+        <button data-g="lang" data-v="en" class="on">EN English</button>
+        <button data-g="lang" data-v="fr">FR Monolingual</button>
+        <button data-g="lang" data-v="fr-bilingual">FR + EN Bilingual</button>
+        <button data-g="lang" data-v="auto">Auto</button>
+      </div>
     </div>
-    <button id="startBtn" onclick="toggle()">
+
+    <button id="startBtn">
       <span class="pulse-dot"></span>
       <span id="startBtnTxt">Start</span>
     </button>
+  </div>
+
+  <div class="ref-card">
+    <div class="ref-head">
+      <h2>Reference transcript <span class="opt">optional</span></h2>
+      <span class="ref-hint">Paste exactly what will be said. Each model gets a word error rate (WER) when the run ends. Case and punctuation are ignored; numbers written as digits vs words count as errors.</span>
+    </div>
+    <textarea id="refText" rows="3" placeholder="e.g. The quick brown fox jumps over the lazy dog."></textarea>
   </div>
 
   <div class="err" id="errEl">
     <span></span><span id="errTxt"></span>
   </div>
 
-  <!-- VAD meter -->
+  <!-- Level meter -->
   <div class="vad-card">
     <h2>Audio Level</h2>
     <div class="meter-wrap" id="mw">
@@ -43,90 +55,48 @@
 
   <!-- Side-by-side panels -->
   <div class="cols">
-    <!-- AssemblyAI U3 Pro -->
+    <!-- Universal-3.5 Pro Realtime -->
     <div class="panel">
-      <div class="ph aai">
-        <h3 id="tAAI">AssemblyAI U3 Pro — Streaming STT (English)</h3>
+      <div class="ph u35">
+        <h3>Universal-3.5 Pro Realtime</h3>
         <div class="tags">
-          <span class="tag" style="border-color:#3a2060;color:var(--purple);background:#120820">model=u3-rt-pro</span>
-          <span class="tag" id="lAAItag">(default prompt)</span>
-          <span class="tag fixed">min_turn_silence=100ms</span>
+          <span class="tag" style="border-color:#3a2060;color:var(--purple);background:#120820">speech_model=universal-3-5-pro</span>
           <span class="tag fixed">16kHz PCM16</span>
+          <span class="tag" data-lang-tag>language_codes=["en"]</span>
         </div>
-        <div class="model-note">Punctuation-based EOT · <span id="aaiNote" style="color:var(--purple)"></span></div>
-        <div class="lat-stats">
-          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="aa-last">—</span></div>
-          <div class="ls-item"><span class="ls-label">Avg</span><span class="ls-val na" id="aa-avg">—</span></div>
-          <div class="ls-item"><span class="ls-label">Min</span><span class="ls-val na" id="aa-min">—</span></div>
-          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="aa-max">—</span></div>
+        <div class="model-note">Previous-gen flagship · <span id="u35-note" style="color:var(--purple)"></span></div>
+        <div class="session-info" id="u35-session">Not connected</div>
+        <div class="lat-stats" title="Final-transcript latency: time from when the audio of the last spoken word left the server to when the final transcript arrived">
+          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="u35-last">—</span></div>
+          <div class="ls-item"><span class="ls-label">P50</span><span class="ls-val na" id="u35-p50">—</span></div>
+          <div class="ls-item"><span class="ls-label">P90</span><span class="ls-val na" id="u35-p90">—</span></div>
+          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="u35-max">—</span></div>
         </div>
       </div>
-      <div class="ta" id="aAAI"><span class="ph2">Transcription appears here live…</span></div>
+      <div class="ta" id="u35-out"><span class="ph2">Transcription appears here live…</span></div>
+      <div class="align" id="u35-align" hidden></div>
     </div>
 
-    <!-- Voxtral Realtime -->
+    <!-- AssemblyAI-STT-3.7-Realtime-Agent -->
     <div class="panel">
-      <div class="ph vx">
-        <h3 id="tVX">Voxtral — Realtime STT (Auto-detect)</h3>
+      <div class="ph s37">
+        <h3>STT-3.7 Realtime Agent</h3>
         <div class="tags">
-          <span class="tag"
-            style="border-color:#0a3a45;color:var(--vx);background:#031520">model=voxtral-mini-transcribe-realtime</span>
-          <span class="tag fixed">pcm_s16le@16kHz</span>
-          <span class="tag fixed">delay=480ms balanced</span>
-          <span class="tag">auto-detect language</span>
+          <span class="tag" style="border-color:#0a3a45;color:var(--s37);background:#031520">speech_model=assemblyai-stt-3-7-realtime-agent</span>
+          <span class="tag fixed">16kHz PCM16</span>
+          <span class="tag" data-lang-tag>language_codes=["en"]</span>
         </div>
-        <div class="model-note">Streaming deltas · 1.5s silence-flush · <span id="vxNote"
-            style="color:var(--vx)"></span></div>
-        <div class="lat-stats">
-          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="vx-last">—</span></div>
-          <div class="ls-item"><span class="ls-label">Avg</span><span class="ls-val na" id="vx-avg">—</span></div>
-          <div class="ls-item"><span class="ls-label">Min</span><span class="ls-val na" id="vx-min">—</span></div>
-          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="vx-max">—</span></div>
+        <div class="model-note">Voice-agent model · <span id="s37-note" style="color:var(--s37)"></span></div>
+        <div class="session-info" id="s37-session">Not connected</div>
+        <div class="lat-stats" title="Final-transcript latency: time from when the audio of the last spoken word left the server to when the final transcript arrived">
+          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="s37-last">—</span></div>
+          <div class="ls-item"><span class="ls-label">P50</span><span class="ls-val na" id="s37-p50">—</span></div>
+          <div class="ls-item"><span class="ls-label">P90</span><span class="ls-val na" id="s37-p90">—</span></div>
+          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="s37-max">—</span></div>
         </div>
       </div>
-      <div class="ta" id="aVX"><span class="ph2">Transcription appears here live…</span></div>
-    </div>
-
-    <!-- Soniox STT RT v5 -->
-    <div class="panel">
-      <div class="ph sox">
-        <h3 id="tSOX">Soniox — STT RT v5 (English)</h3>
-        <div class="tags">
-          <span class="tag"
-            style="border-color:#4a2a06;color:var(--sox);background:#1a0e02">model=stt-rt-v5</span>
-          <span class="tag fixed">pcm_s16le@16kHz</span>
-          <span class="tag fixed">WebSocket streaming</span>
-        </div>
-        <div class="model-note">Token-level streaming · <span id="soxNote" style="color:var(--sox)"></span></div>
-        <div class="lat-stats">
-          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="sx-last">—</span></div>
-          <div class="ls-item"><span class="ls-label">Avg</span><span class="ls-val na" id="sx-avg">—</span></div>
-          <div class="ls-item"><span class="ls-label">Min</span><span class="ls-val na" id="sx-min">—</span></div>
-          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="sx-max">—</span></div>
-        </div>
-      </div>
-      <div class="ta" id="aSOX"><span class="ph2">Transcription appears here live…</span></div>
-    </div>
-
-    <!-- Gladia Solaria -->
-    <div class="panel">
-      <div class="ph gla">
-        <h3 id="tGLA">Gladia Solaria — Realtime STT (English)</h3>
-        <div class="tags">
-          <span class="tag"
-            style="border-color:#064a2a;color:var(--gla);background:#021a0e">model=solaria-1</span>
-          <span class="tag fixed">pcm_s16le@16kHz</span>
-          <span class="tag fixed">v2 live API</span>
-        </div>
-        <div class="model-note">Utterance-level finals · <span id="glaNote" style="color:var(--gla)"></span></div>
-        <div class="lat-stats">
-          <div class="ls-item"><span class="ls-label">Last</span><span class="ls-val na" id="gl-last">—</span></div>
-          <div class="ls-item"><span class="ls-label">Avg</span><span class="ls-val na" id="gl-avg">—</span></div>
-          <div class="ls-item"><span class="ls-label">Min</span><span class="ls-val na" id="gl-min">—</span></div>
-          <div class="ls-item"><span class="ls-label">Max</span><span class="ls-val na" id="gl-max">—</span></div>
-        </div>
-      </div>
-      <div class="ta" id="aGLA"><span class="ph2">Transcription appears here live…</span></div>
+      <div class="ta" id="s37-out"><span class="ph2">Transcription appears here live…</span></div>
+      <div class="align" id="s37-align" hidden></div>
     </div>
   </div>
 
